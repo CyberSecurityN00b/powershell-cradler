@@ -4,11 +4,12 @@ import shlex
 from datetime import datetime
 from typing import Dict, Optional, Tuple, Type
 
-from prompt_toolkit import PromptSession
+from prompt_toolkit import PromptSession, print_formatted_text
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
 from prompt_toolkit.layout.containers import Window
+from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -16,6 +17,7 @@ from rich.text import Text
 from rich import box
 
 from plugins._base import BaseCradle
+from core.models import CradleType
 
 PROMPT_STYLE = Style.from_dict({"": "#00d7ff"})
 
@@ -57,7 +59,8 @@ class PowerShellCradleTerminal:
         self._print_banner()
         while self.running:
             try:
-                raw  = self.session.prompt(HTML("<ansibrightcyan><b>PowerShell Cradler</b></ansibrightcyan> <ansicyan>></ansicyan>"))
+                with patch_stdout():
+                    raw  = self.session.prompt(HTML("<ansibrightcyan><b>PowerShell Cradler</b></ansibrightcyan> <ansicyan>></ansicyan>"))
                 line = raw.strip()
                 if not line:
                     continue
@@ -94,6 +97,8 @@ class PowerShellCradleTerminal:
 
             "enable":    self._cmd_enable,
             "disable":   self._cmd_disable,
+            "singleuse": self._cmd_singleuse,
+            "multiuse":  self._cmd_multiuse,
 
             "cradles":   self._cmd_sessions,
             "plugins":   self._cmd_plugins,
@@ -123,15 +128,14 @@ class PowerShellCradleTerminal:
     def _print_banner(self):
         self.console.print(f"[bold bright_cyan]{BANNER}[/bold bright_cyan]")
         self.console.print(
-            "  [dim]PowerShell Payload Cradle Delivery Framework[/dim]  "
-            "[dim]|[/dim]  [dim]PEN-300 / OSEP Edition[/dim]\n"
+            "  [dim]PowerShell Payload Cradle Delivery Framework[/dim]  \n"
         )
         host = self.server_config['host']
         port = self.server_config['port']
-        url  = self.server_config['url']
+        domain  = self.server_config['domain']
         self.console.print(
-            f"  [green]•[/green] Server       : [bold]{host}[/bold]:[bold]{port}[/bold] [dim]restart with -h and -p args to change[/dim]\n"
-            f"  [green]•[/green] Server URL   : [bold]{url}[/bold] [dim]Use [cyan]config[/cyan] to change[/dim]\n"
+            f"  [green]•[/green] Server       : [bold]{host}[/bold]:[bold]{port}[/bold] [dim]restart with --host and --port args to change[/dim]\n"
+            f"  [green]•[/green] Server URL   : [bold]{domain}[/bold] [dim]Use [cyan]config[/cyan] to change[/dim]\n"
             f"  [green]•[/green] Plugins      : [bold]{len(self.plugin_map)}[/bold] loaded\n"
             f"  [green]•[/green] Obfuscation  : [dim](none | base64 | char |[/dim] [bold]getrandom[/bold][dim])[/dim]\n"
         )
@@ -148,18 +152,20 @@ class PowerShellCradleTerminal:
         table.add_column("Command", style="bold white", no_wrap=True)
         table.add_column("Description", style="dim white")
         cmds = [
-            ("help [<plugic>]",        "General help, or scoped to a specific plugin when specified"),
+            ("help [<plugin>]",        "General help, or scoped to a specific plugin when specified"),
             ("plugins",                "List available cradle plugins"),
             ("cradles",                "List all active cradle instances and their UIDs/URLs"),
             ("chains",                 "List chains of cradles"),
             ("files",                  "List all locally hosted files and their UIDs/URLs"),
             ("list",                   "List available plugins, active cradles, chains, and files hosted"),
             ("create <plugin>",        "Enter the creation shell for a new cradle"),
-            ("chain <plugin1> [...]",  "Enter creation shells to create multiple cradles chained together")
+            ("chain <plugin1> [...]",  "Enter creation shells to create multiple cradles chained together"),
             ("delete <id|#>",          "Permanently delete a cradle instance"),
             ("edit <id|#>",            "Edit a cradle instance"),
             ("enable <id|#>",          "Re-enable a disabled cradle"),
             ("disable <id|#>",         "Disable a cradle (returns 404 when accessed)"),
+            ("singleuse <id|#>",       "Set cradle to single-use (auto-disables after first hit)"),
+            ("multiuse <id|#>",        "Set cradle back to multi-use"),
             ("info <id|#>",            "Show details and payload preview for a cradle"),
             ("host <filepath>",        "Add a local file to the hosted files registry"),
             ("unhost <id|#>",          "Remove a file from the hosting registry based on id/index"),
@@ -204,28 +210,59 @@ class PowerShellCradleTerminal:
             self.console.print(table)
 
     def _cmd_list(self, args):
+        columns = os.get_terminal_size().columns
         self._cmd_plugins(args)
-        self.console.print(Window(height=1, char="-"))
+        self.console.print("-" * columns)
         self._cmd_sessions(args)
-        self.console.print(Window(height=1, char="-"))
+        self.console.print("-" * columns)
         self._cmd_chains(args)
-        self.console.print(Window(height=1, char="-"))
+        self.console.print("-" * columns)
         self._cmd_files(args)
 
 
     def _cmd_create(self, args):
+        if not args or len(args) > 1:
+            self.console.print("  [red]:Usage:[/red] create [bold]<plugin>[/bold]")
+            if len(args) > 1:
+                self.console.print("  [dim]You may have meant to use[/dim] [bold cyan]create <plugin1> [...][/bold cyan]")
+            return
         pass
 
     def _cmd_chain(self, args):
         pass
 
     def _cmd_delete(self, args):
-        pass
+        if not args or len(args) > 1:
+            self.console.print("  [red]:Usage:[/red] delete [bold]<id|#>[/bold]")
+            return
+        inst = self.endpoint_registry.delete(args[0])
+        if inst:
+            self.console.print(f"  [green]✓[/green] Deleted cradle [bold]#{inst.index}[/bold] ({inst.uid})")
+        else:
+            self._not_found(args[0])
 
     def _cmd_enable(self, args):
+        if not args or len(args) > 1:
+            self.console.print("  [red]:Usage:[/red] enable [bold]<id|#>[/bold]")
+            return
         pass
 
     def _cmd_disable(self, args):
+        if not args or len(args) > 1:
+            self.console.print("  [red]:Usage:[/red] disable [bold]<id|#>[/bold]")
+            return
+        pass
+
+    def _cmd_singleuse(self, args):
+        if not args or len(args) > 1:
+            self.console.print("  [red]:Usage:[/red] singleuse [bold]<id|#>[/bold]")
+            return
+        pass
+
+    def _cmd_multiuse(self, args):
+        if not args or len(args) > 1:
+            self.console.print("  [red]:Usage:[/red] multiuse [bold]<id|#>[/bold]")
+            return
         pass
 
     def _cmd_sessions(self, args):
@@ -235,7 +272,31 @@ class PowerShellCradleTerminal:
         pass
 
     def _cmd_files(self, args):
-        pass
+        files = self.endpoint_registry.list_instances(CradleType.File)
+        if not files:
+            self.console.print(
+                "  [dim]No files hosted. Use [bold]host <filepath>[/bold] to host a file.[/dim]"
+            )
+            return
+        domain = self.server_config['domain']
+        table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", padding=(0, 2))
+        table.add_column("Index",     style="dim", no_wrap=True)
+        table.add_column("UID",       style="dim", no_wrap=True)
+        table.add_column("Filename",  style="bold white", no_wrap=True)
+        table.add_column("Size",      style="yellow", justify="right", no_wrap=True)
+        table.add_column("Status",    no_wrap=True)
+        table.add_column("URL",       style="cyan")
+        for hf in files:
+            size_str   = _fmt_size(self.endpoint_registry.filesize(hf.uid))
+            exists     = "[green]online[/green]" if os.path.exists(hf.cradle_context) else "[red]missing[/red]"
+            url        = self.endpoint_registry.get_cradle_command(hf.uid)
+            table.add_row(str(hf.index), hf.uid, hf.cradle_context, size_str, exists, url)
+        self.console.print(Panel(
+            table,
+            title="[bold cyan]Hosted Files[/bold cyan]",
+            border_style="cyan",
+            subtitle="[dim]Use [bold]unhost <uid>[/bold] to remove[/dim]"
+        ))
 
     def _cmd_chains(self,args):
         pass
@@ -250,14 +311,62 @@ class PowerShellCradleTerminal:
         pass
 
     def _cmd_host(self, args):
-        pass
+        if not args or len(args) > 1:
+            self.console.print("  [red]Usage:[/red] host [bold]\"<filepath>\"[/bold]")
+            if len(args) > 1:
+                self.console.print("  [dim]If filepath has spaces, surround with quotation marks[/dim]")
+            return
+
+        filepath = args[0]
+        if not os.path.isfile(filepath):
+            self.console.print(f"  [red]✗[/red] No file matching '[bold]{filepath}[/bold]'")
+            return
+        
+        inst = [x for x in self.endpoint_registry.list_instances(CradleType.File) if x.cradle_context == filepath]
+        if inst:
+            inst = inst[0]
+            self.console.print(f"  [red]✗[/red] File '[bold]{filepath}[/bold]' alread hosted in cradle [bold]{inst.index}[/bold] ([bold]{inst.uid}[bold])")
+            return
+        
+        inst = self.endpoint_registry.create(CradleType.File,filepath,None)
+        if inst:
+            self.console.print(f"  [green]✓[/green] Cradle [bold]{inst.index}[/bold] ([bold]{inst.uid}[bold]) created for '[bold]{filepath}[/bold]'")
+            return
+        else:
+            self.console.print(f"  [red]✗[/red] Unknown error when creating cradle for '[bold]{filepath}[/bold]'")
+            return
 
     def _cmd_unhost(self, args):
-        pass
+        if not args or len(args) > 1:
+            self.console.print("  [red]:Usage:[/red] unhost [bold]<id|#>[/bold]")
+            return
+        uid = args[0]
+        inst = self.endpoint_registry.get_by_ref(uid)
+        if inst:
+            if inst.cradle_type == CradleType.File:
+                self.endpoint_registry.delete(uid)
+                self.console.print(f"  [green]✓[/green] No longer hosting [bold]{inst.cradle_context}[/bold] ({uid})")
+                return
+            else:
+                self.console.print(f"  [red]✗[/red] Cradle [bold]{uid}[/bold] is not a file. Use [bold]delete {uid}[/bold] instead")
+                return
+        else:
+            self._not_found(uid)
+            return
 
     def _cmd_exit(self, args):
         self.console.print("  [dim]Goodbye.[/dim]\n")
         self.running = False
+
+    # -----------------------------------
+    # Helpers
+    # -----------------------------------
+    def _notification(self, notify_type: str, notify_text: str):
+        # Necessary due to notifications showing with prompt + patch_stdout
+        print_formatted_text(HTML(f"  - {notify_type}: <ansigray>{notify_text}</ansigray>"))
+
+    def _not_found(self, ref: str):
+        self.console.print(f"  [red]✗[/red] No cradle matching [bold]{ref}[/bold]")
 
 def _fmt_size(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
