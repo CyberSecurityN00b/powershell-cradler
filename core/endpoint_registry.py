@@ -6,7 +6,7 @@ import re
 
 from typing import Dict, List, Optional, Tuple, Type
 from core.models import CradleInstance, CradleType
-from plugins._base import BaseCradle
+from plugins._base import BaseCradlePlugin
 from datetime import datetime
 
 _STORAGE_PATH = os.path.join(
@@ -22,7 +22,7 @@ _NOTIFICATION_PATH = os.path.join(
 class EndpointRegistry:
     def __init__(
             self,
-            plugin_map: Dict[Tuple[str, str], Type[BaseCradle]],
+            plugin_map: Dict[Tuple[str, str], Type[BaseCradlePlugin]],
             server_config: dict,
     ):
         self.plugin_map    = plugin_map
@@ -106,7 +106,7 @@ class EndpointRegistry:
     def get_by_ref(self, ref: str) -> Optional[CradleInstance]:
         if ref in self._instances:
             return self._instances[ref]
-        for inst in self._instances.value():
+        for inst in self._instances.values():
             if inst.index == int(ref):
                 return inst
         return None
@@ -114,7 +114,7 @@ class EndpointRegistry:
     def delete(self, ref: str) -> Optional[CradleInstance]:
         inst = self.get_by_ref(ref)
         if inst:
-            del self.instances[inst.uid]
+            del self._instances[inst.uid]
             self._save()
         return inst
     
@@ -146,7 +146,7 @@ class EndpointRegistry:
             self._save()
         return inst
     
-    def list_instances(self) -> List[CradleInstance]:
+    def list_all_instances(self) -> List[CradleInstance]:
         return sorted(self._instances.values(), key=lambda x: x.index)
     
     def list_instances(self, cradle_type: CradleType) -> List[CradleInstance]:
@@ -165,18 +165,17 @@ class EndpointRegistry:
             return None, None, None
         
         if inst.cradle_type == CradleType.Plugin:
-            plugin_cls = self.plugin_map.get(inst.cradle_context)
-            if not plugin_cls:
+            plugin = self.plugin_map.get(inst.cradle_context)
+            if not plugin:
                 return None, None, None
             
-            opts    = self.get_options_with_defaults(inst.options)
-            plugin  = plugin_cls()
-            payload = plugin.generate(opts)
+            plugin_cls  = plugin(self)
+            payload     = plugin_cls.generate(inst)
 
             inst.used_count += 1
             self._save()
 
-            return inst.cradle_type, payload, plugin_cls.CONTENT_TYPE
+            return inst.cradle_type, payload, plugin.CONTENT_TYPE
 
         elif inst.cradle_type == CradleType.File:
             return inst.cradle_type, inst.cradle_context, None
@@ -188,11 +187,11 @@ class EndpointRegistry:
         if inst:
             url = f"http://{self.server_config['domain']}/{inst.uid}"
             if inst.cradle_type == CradleType.Plugin:
-                plugin_cls = self.plugin_map.get(inst.cradle_context)
-                if not plugin_cls:
+                plugin = self.plugin_map.get(inst.cradle_context)
+                if not plugin:
                     return ""
-                opts = self.get_options_with_defaults(inst.options)
-                return plugin_cls().cradle_command(url, opts)
+                plugin_cls = plugin(self)
+                return plugin_cls.cradle_command(inst,url)
             else:
                 return url
         return inst
@@ -212,7 +211,7 @@ class EndpointRegistry:
         remote_addr = re.sub(r':', '.', remote_addr)
         remote_addr = re.sub(r'[^\w\s.-]', '', remote_addr)
         
-        outpath = os.path.join(_NOTIFICATION_PATH,remote_addr,f"{datetime.strftime(datetime.now(),"%Y-%m-%dT%H.%M.%S")} {inst.context_type}")
+        outpath = os.path.join(_NOTIFICATION_PATH,remote_addr,f"{datetime.strftime(datetime.now(),"%Y-%m-%dT%H.%M.%S")} {inst.cradle_context}")
         with open(outpath, "w") as f:
             json.dump(
                 body_json,

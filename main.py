@@ -3,7 +3,7 @@ import sys
 import threading
 import logging
 import argparse
-import time
+import traceback
 
 logging.getLogger("wrkzeug").setLevel(logging.ERROR)
 
@@ -38,6 +38,9 @@ def main():
     try:
         terminal.run()
     except Exception as exc:
+        tb = traceback.extract_tb(sys.exc_info()[2])
+        filename, line_number, func_name, text = tb[-1]
+        print(f"\nException occurred in function '{func_name}' at line {line_number} in {filename}")
         print(f"\nFatal error: {exc}", file=sys.stderr)
         sys.exit(1)
 

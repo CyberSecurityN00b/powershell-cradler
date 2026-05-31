@@ -1,15 +1,15 @@
 import importlib
 import pkgutil
 
-from typing import Dict, Tuple, Type
-from plugins._base import BaseCradle
+from typing import Dict, Type
+from plugins._base import BaseCradlePlugin
 
 
-def discover_plugins() -> Dict[Tuple[str, str], Type[BaseCradle]]:
+def discover_plugins() -> Dict[str, Type[BaseCradlePlugin]]:
     """Walk the plugins package and collect every BaseCradle subclass."""
     import plugins as _plugins_pkg
 
-    plugin_map: Dict[Tuple[str, str], Type[BaseCradle]] = {}
+    plugin_map: Dict[str, Type[BaseCradlePlugin]] = {}
 
     for _importer, modname, _ispkg in pkgutil.walk_packages(
         path=_plugins_pkg.__path__,
@@ -25,10 +25,10 @@ def discover_plugins() -> Dict[Tuple[str, str], Type[BaseCradle]]:
             attr = getattr(module, attr_name)
             if (
                 isinstance(attr, type)
-                and issubclass(attr, BaseCradle)
-                and attr is not BaseCradle
-                and getattr(attr, "TYPE", "undefined") != "undefined"
+                and issubclass(attr, BaseCradlePlugin)
+                and attr is not BaseCradlePlugin
+                and getattr(attr, "NAME", "undefined") != "undefined"
             ):
-                plugin_map[attr.TYPE.lower()] = attr
+                plugin_map[attr.NAME.lower()] = attr
     
     return plugin_map

