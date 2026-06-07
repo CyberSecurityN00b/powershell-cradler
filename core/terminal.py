@@ -1,5 +1,6 @@
 import os
 import shlex
+import pyperclip
 
 from datetime import datetime
 from typing import Dict, Optional, Tuple, Type
@@ -8,13 +9,13 @@ from prompt_toolkit import PromptSession, print_formatted_text
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
-from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.completion import Completer, Completion, NestedCompleter, PathCompleter
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from rich.markup import escape
 from rich import box
 
 from plugins._base import BaseCradlePlugin
@@ -66,6 +67,7 @@ class PowerShellCradleTerminal:
                 'help': completer_plugin,
                 'create': completer_plugin,
                 'chain': completer_plugin,
+                'clip': completer_plugin,
                 'delete': completer_uid,
                 'edit': completer_uid,
                 'enable': completer_uid,
@@ -119,6 +121,7 @@ class PowerShellCradleTerminal:
             "create":    self._cmd_create,
             "add":       self._cmd_create,
             "new":       self._cmd_create,
+            "clip":      self._cmd_clip,
 
             "chain":     self._cmd_chain,
 
@@ -179,7 +182,7 @@ class PowerShellCradleTerminal:
             self._print_specific_help(args[0])
 
     def _print_general_help(self):
-        table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan", padding=(0,1), show_lines=True)
+        table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan", padding=(0,1), show_lines=False)
         table.add_column("Command", style="bold white", no_wrap=True)
         table.add_column("Description", style="dim white")
         cmds = [
@@ -191,6 +194,7 @@ class PowerShellCradleTerminal:
             ("list",                   "List available plugins, active cradles, chains, and files hosted"),
             ("create <plugin>",        "Enter the creation shell for a new cradle"),
             ("chain <plugin1> [...]",  "Enter creation shells to create multiple cradles chained together"),
+            ("clip <plugin>",          "Copy's the cradle's command or URL to the clipboard")
             ("delete <id|#>",          "Permanently delete a cradle instance"),
             ("edit <id|#>",            "Edit a cradle instance"),
             ("enable <id|#>",          "Re-enable a disabled cradle"),
@@ -300,7 +304,7 @@ class PowerShellCradleTerminal:
             cmd = self.endpoint_registry.get_cradle_command(inst.uid)
             if cmd:
                 self.console.print(Panel(
-                    f"[bold white]{cmd}[/bold white]",
+                    f"[bold white]{escape(cmd)}[/bold white]",
                     title="[bold cyan]Cradle Command[/bold cyan]",
                     subtitle="[dim]Run this on the target[/dim]",
                     border_style="bright_cyan",
@@ -336,12 +340,32 @@ class PowerShellCradleTerminal:
         cmd = self.endpoint_registry.get_cradle_command(inst.uid)
         if cmd:
             self.console.print(Panel(
-                f"[bold white]{cmd}[/bold white]",
+                f"[bold white]{escape(cmd)}[/bold white]",
                 title="[bold cyan]Starting Cradle Command[/bold cyan]",
                 subtitle="[dim]Run this on the target[/dim]",
                 border_style="bright_cyan",
                 padding=(1, 2)
             ))
+
+    def _cmd_clip(self, args):
+        if not args or len(args) > 1:
+            self.console.print("  [red]Usage:[/red] delete [bold]<id|#>[/bold]")
+            return
+        inst = self.endpoint_registry.get_by_ref(args[0])
+        if inst:
+            if inst.cradle_type == CradleType.Plugin:
+                cmd = self.endpoint_registry.get_cradle_command(inst.uid)
+                if cmd:
+                    self.console.print(f"  [green]✓[/green] Copied [bold]#{inst.index}[/bold] ({inst.uid}) cradle command to clipboard")
+                    #pyperclip.copy(cmd)
+                    print(f"May fail, here's the raw: {cmd}")
+                    return
+            url = f"http://{self.server_config['url']}/{inst.uid}"
+            self.console.print(f"  [green]✓[/green] Copied [bold]{inst.index}[/bold] ({inst.uid}) URL to clipboard")
+            #pyperclip.copy(url)
+            print(f"May fail here's the raw: {url}")
+        else:
+            self._not_found(args[0])
 
     def _cmd_delete(self, args):
         if not args or len(args) > 1:
@@ -532,21 +556,21 @@ class PowerShellCradleTerminal:
             self._not_found(args[0])
         url = f"http://{self.server_config['domain']}/{inst.uid}"
         if not inst.enabled:
-            status_str = "[red]disabled[/red]"
+            status_str,status_style = "disabled","red"
         elif inst.single_use and inst.used_count > 0:
-            status_str = "[yellow]spent[/yellow]"
+            status_str,status_style = "spent","yellow"
         else:
-            status_str = "[green]enabled[/green]"
-        use_str = "[yellow]single-use[/yellow]" if inst.single_use else "[green]multi-use[/green]"
+            status_str,status_style = "enabled","green"
+        use_str,use_style = ("single-use","yellow") if inst.single_use else ("multi-use","green")
         created = datetime.fromisoformat(inst.created_at).strftime("%Y-%m-%d %H:%M:%S")
 
         meta = Text()
         meta.append("  Index     : ", style="dim"); meta.append(f"#{inst.index}\n", style="bold white")
         meta.append("  UID       : ", style="dim"); meta.append(f"{inst.uid}\n", style="bold white")
-        meta.append("  Type      : ", style="dim"); meta.append(f"{inst.cradle_type.name}\n", style="bold cyan")
+        meta.append("  Type      : ", style="dim"); meta.append(f"{CradleType(inst.cradle_type).name}\n", style="bold cyan")
         meta.append("  Context   : ", style="dim"); meta.append(f"{inst.cradle_context}\n", style="cyan")
-        meta.append("  Status    : ", style="dim"); meta.append(f"{status_str}\n")
-        meta.append("  Use mode  : ", style="dim"); meta.append(f"{use_str}\n")
+        meta.append("  Status    : ", style="dim"); meta.append(f"{status_str}\n", style=status_style)
+        meta.append("  Use mode  : ", style="dim"); meta.append(f"{use_str}\n", style=use_style)
         meta.append("  Use count : ", style="dim"); meta.append(f"{int(inst.used_count)}\n")
         meta.append("  Created   : ", style="dim"); meta.append(f"{created}\n", style="dim white")
 
@@ -564,10 +588,10 @@ class PowerShellCradleTerminal:
             padding=(0, 2)
         ))
 
-        cmd = self.endpoint_registry.get_cradle_command(inst)
+        cmd = self.endpoint_registry.get_cradle_command(inst.uid)
         if cmd:
             self.console.print(Panel(
-                f"[bold white]{cmd}[/bold white]",
+                f"[bold white]{escape(cmd)}[/bold white]",
                 title="[bold cyan] Cradle Command[/bold cyan]",
                 subtitle="[dim]Run this on the target[/dim]",
                 border_style="bright_cyan",
@@ -578,7 +602,7 @@ class PowerShellCradleTerminal:
             _, payload, _ = self.endpoint_registry.generate_payload(inst.uid)
             if payload:
                 self.console.print(Panel(
-                    f"[dim]{payload}[/dim]",
+                    f"[dim]{escape(payload)}[/dim]",
                     title=f"[bold cyan]Host Payload Preview[/bold cyan]",
                     subtitle=f"[dim]GET {url}[/dim]",
                     border_style="dim cyan",
