@@ -211,7 +211,13 @@ class EndpointRegistry:
         remote_addr = re.sub(r':', '.', remote_addr)
         remote_addr = re.sub(r'[^\w\s.-]', '', remote_addr)
         
-        outpath = os.path.join(_NOTIFICATION_PATH,remote_addr,f"{datetime.strftime(datetime.now(),"%Y-%m-%dT%H.%M.%S")} {inst.cradle_context}")
+        context_inst = self._instances.get(inst.cradle_context)
+        if not inst:
+            context_text = inst.cradle_context
+        else:
+            context_text = f"{context_inst.cradle_context}_{inst.cradle_context}"
+        outpath = os.path.join(_NOTIFICATION_PATH,remote_addr,f"{datetime.strftime(datetime.now(),"%Y-%m-%dT%H.%M.%S")}_{context_text}")
+        os.makedirs(os.path.dirname(outpath), exist_ok=True)
         with open(outpath, "w") as f:
             json.dump(
                 body_json,

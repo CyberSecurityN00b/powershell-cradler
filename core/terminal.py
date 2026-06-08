@@ -715,9 +715,8 @@ class PowerShellCradleTerminal:
             current_opts = plugin_inst.get_options_with_defaults(inst)
             self._print_current_options(cls,current_opts)
             self.console.print(
-                "\n  [dim]Commands: [bold]set <OPTION> <value>[/bold]  |  "
-                "[bold]unset <OPTION>[/bold]  |  [bold]options[/bold]  |  "
-                "[bold]save[/bold]  |  [bold]cancel[/bold][/dim]\n"
+                "\n  [dim]Commands: [bold]set <OPTION> <value>[/bold]  |  [bold]setfile <OPTION> <filepath>[/bold]\n"
+                "[bold]unset <OPTION>[/bold]  |  [bold]options[/bold]  |  [bold]save[/bold]  |  [bold]cancel[/bold][/dim]\n"
             )
             sub_session = PromptSession(
                 history=InMemoryHistory(),
@@ -726,6 +725,7 @@ class PowerShellCradleTerminal:
             completer_options = OptionsCompleter(plugin_inst,current_opts)
             completer = NestedCompleter.from_nested_dict({
                 'set': completer_options,
+                'setfile': PathCompleter(),
                 'unset': completer_options,
                 'options': None,
                 'save': None,
@@ -760,7 +760,7 @@ class PowerShellCradleTerminal:
                     self.console.print("  [dim]Cancelled.[/dim]")
                     return
                 
-                elif sub_cmd == "set":
+                elif sub_cmd == "set" or sub_cmd == "setfile":
                     if len(parts) < 3:
                         self.console.print("  [red]Usage:[/red] set [bold]<OPTION>[/bold] [bold]<value>[/bold]")
                         continue

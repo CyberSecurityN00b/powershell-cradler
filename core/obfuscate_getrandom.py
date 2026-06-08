@@ -16,6 +16,8 @@ Architecture (why this is non-obvious):
 import random as _py_random
 import struct
 
+from typing import List
+
 _MBIG  = 2147483647 # int.MaxValue
 _MSEED = 161803398
 
@@ -51,9 +53,11 @@ class DotNetRandom:
                 n = i + 30
                 if n >= 55:
                     n-= 55
-                self._seed_array[i] -= self._seed_array[1+n]
-                if self._seed_array[i] < 0:
-                    self._seed_array[i] += _MBIG
+                val = self._seed_array[i] - self._seed_array[1 + n]
+                val = (val & 0xFFFFFFFF) - 0x100000000 if (val & 0xFFFFFFFF) >= 0x80000000 else (val & 0xFFFFFFFF)
+                if val < 0:
+                    val += _MBIG
+                self._seed_array[i] = val
 
     def _legacy_internal_sample(self) -> int:
         """System.Random.InternalSample() - the raw subtractive PRNG output."""
@@ -143,17 +147,32 @@ def powershell_get_random_count(items: list, seed: int, count: int) -> list:
 
     return result
 
-def get_random_obfuscated_string(string: str, seed: int = None) -> str:
-    if seed is None:
-        seed = _py_random.randint(0, 2147483646)
 
-    n = len(string)
+powershell_avoid_strings = [
+    "amsi"
+]
 
-    shuffled = powershell_get_random_count(list(range(n)), seed, n)
+def get_random_obfuscated_string(string: str, seed: int = None, list_avoid_strings: List[str] = powershell_avoid_strings) -> str:
+    while True:
+        if seed is None:
+            seed = _py_random.randint(0, 2147483646)
 
-    unshuffled = [''] * n
-    for i, dest in enumerate(shuffled):
-        unshuffled[dest] = string[i]
-    unshuffled_str = ''.join(unshuffled)
+        n = len(string)
 
-    return f'([string]::new(([char[]]"{unshuffled_str.replace('"','`"')}"|Get-Random -Se {seed} -C {n})))'
+        shuffled = powershell_get_random_count(list(range(n)), seed, n)
+
+        unshuffled = [''] * n
+        for i, dest in enumerate(shuffled):
+            unshuffled[dest] = string[i]
+        unshuffled_str = ''.join(unshuffled)
+
+        regenerate = False
+        for avoid in list_avoid_strings:
+            if avoid.casefold() in unshuffled_str.casefold():
+                seed = None
+                regenerate = True
+
+        if not regenerate:
+            break
+
+    return f'([string]::new(([char[]]"{unshuffled_str.replace('"','`"').replace("$","`$")}"|Get-Random -Se {seed} -C {n})))'
