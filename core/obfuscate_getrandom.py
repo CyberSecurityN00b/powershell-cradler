@@ -14,6 +14,8 @@ Architecture (why this is non-obvious):
 """
 
 import random as _py_random
+import string as string_module
+import secrets
 import struct
 
 from typing import List
@@ -149,16 +151,80 @@ def powershell_get_random_count(items: list, seed: int, count: int) -> list:
 
 
 powershell_avoid_strings = [
-    "amsi"
+    "addr",       # Memory address related
+    "amsi",       # AMSI Bypass
+    "assembly",   # System.Assembly
+    "base64",     # Base64 Encoding/Decoding
+    "buff",       # Buffer related
+    "bypass",     # Bypass in general
+    "bytes",      # Byte manipulation
+    "cat",        # netcat/powercat/etc
+    "char",       # Datatype related
+    "compress",   # Compression
+    "content",    # Common keyword
+    "convert",    # Encoding/Decoding conversion
+    "cred",       # Credentials related
+    "curl",       # Download command
+    "download",   # Download in general
+    "enc",        # Encoding
+    "func",       # Function related
+    "get",        # Common action
+    "hack",       # Common keyword
+    "hidden",     # Hidden
+    "http",       # HTTP related
+    "iex",        # Invoke-Expression shorthand
+    "inject",     # Injection in general
+    "int",        # Datatype related
+    "invoke",     # Invoke in general
+    "iwr",        # Invoke-WebRequest shorthand
+    "katz",       # Mimikatz related
+    "join",       # Join keyword
+    "load",       # Memory action
+    "mem",        # Memory related
+    "mimi",       # Mimikatz related
+    "net",        # Too many commands using net
+    "nonpublic",  # Tied to reflection
+    "nslookup",   # Enumeration command
+    "null",       # Common memory related keyword
+    "ploit",      # Exploit/Sploit
+    "power",      # Any powershell-related tools
+    "proc",       # Process related
+    "read",       # Common action
+    "reflect",    # Reflection
+    "replace",    # Replace keyword
+    "script",     # Script keyword
+    "set",        # Common action
+    "shell",      # Common keyword
+    "size",       # Common actions
+    "ssh",        # SSH related
+    "static",     # Tied to reflection
+    "stream",     # MemoryStream
+    "string",     # Datatype related
+    "system",     # System.???
+    "type",       # GetType
+    "virt",       # Virtual
+    "word",       # Datatype related
+    "write",      # Common action
+    "xor",        # Obfuscation
 ]
 
 def get_random_obfuscated_string(string: str, seed: int = None, list_avoid_strings: List[str] = powershell_avoid_strings) -> str:
+    # Get and preserve initial length of string before garbage data is added
+    original_n = len(string)
+    #return string
+
+    # Make sure that we're not returning the unobfuscated string
+    if len(string) > 2:
+        list_avoid_strings.append(string)
+
     while True:
         if seed is None:
             seed = _py_random.randint(0, 2147483646)
 
-        n = len(string)
+        # Pad string each iteration with random buffering to prevent being too small or matching any strings to avoid
+        #string += ''.join(secrets.choice(string_module.ascii_lowercase+string_module.digits) for i in range(4))
 
+        n = len(string)
         shuffled = powershell_get_random_count(list(range(n)), seed, n)
 
         unshuffled = [''] * n
@@ -167,12 +233,12 @@ def get_random_obfuscated_string(string: str, seed: int = None, list_avoid_strin
         unshuffled_str = ''.join(unshuffled)
 
         regenerate = False
-        for avoid in list_avoid_strings:
-            if avoid.casefold() in unshuffled_str.casefold():
-                seed = None
-                regenerate = True
+        #for avoid in list_avoid_strings:
+        #    if avoid.casefold() in unshuffled_str.casefold():
+        #        seed = None
+        #        regenerate = True
 
         if not regenerate:
             break
 
-    return f'([string]::new(([char[]]"{unshuffled_str.replace('"','`"').replace("$","`$")}"|Get-Random -Se {seed} -C {n})))'
+    return f'([string]::new(([char[]]"{unshuffled_str.replace('"','`"').replace("$","`$").replace("\n","`n")}"|Get-Random -Se {seed} -C {original_n})))'

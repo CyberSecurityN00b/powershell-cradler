@@ -11,6 +11,7 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.completion import Completer, Completion, NestedCompleter, PathCompleter
+from prompt_toolkit.document import Document
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -194,7 +195,7 @@ class PowerShellCradleTerminal:
             ("list",                   "List available plugins, active cradles, chains, and files hosted"),
             ("create <plugin>",        "Enter the creation shell for a new cradle"),
             ("chain <plugin1> [...]",  "Enter creation shells to create multiple cradles chained together"),
-            ("clip <plugin>",          "Copy's the cradle's command or URL to the clipboard")
+            ("clip <plugin>",          "Copy's the cradle's command or URL to the clipboard"),
             ("delete <id|#>",          "Permanently delete a cradle instance"),
             ("edit <id|#>",            "Edit a cradle instance"),
             ("enable <id|#>",          "Re-enable a disabled cradle"),
@@ -336,7 +337,7 @@ class PowerShellCradleTerminal:
         for index, inst in enumerate(instances[:-1]):
             inst.options["NEXT_CRADLE"] = instances[index+1].index
         inst = instances[0]
-        self.console.print("  [green]✓[/green] {len(instances)} cradles created and linked together")
+        self.console.print(f"  [green]✓[/green] {len(instances)} cradles created and linked together")
         cmd = self.endpoint_registry.get_cradle_command(inst.uid)
         if cmd:
             self.console.print(Panel(
@@ -725,7 +726,7 @@ class PowerShellCradleTerminal:
             completer_options = OptionsCompleter(plugin_inst,current_opts)
             completer = NestedCompleter.from_nested_dict({
                 'set': completer_options,
-                'setfile': PathCompleter(),
+                'setfile': OptionsPathCompleter(plugin_inst,current_opts),
                 'unset': completer_options,
                 'options': None,
                 'save': None,
@@ -769,14 +770,15 @@ class PowerShellCradleTerminal:
                     if opt_name not in cls.OPTIONS:
                         self.console.print(f"  [red]Unknown option:[/red] [bold]{opt_name}[/bold]")
                         continue
+                    current_opts[opt_name] = opt_val
                     errors = plugin_inst.validate(inst, current_opts)
                     if errors:
                         for e in errors:
                             self.console.print(f"  [red]✗[/red] {e}")
-                        continue
+                        self.console.print(f"  [yellow]-[/yellow] [bold]{opt_name}[/bold] => [cyan]{opt_val}[/cyan]")
                     else:
                         self.console.print(f"  [green]✓[/green] [bold]{opt_name}[/bold] => [cyan]{opt_val}[/cyan]")
-                        current_opts[opt_name] = opt_val
+                        
 
                 elif sub_cmd == "unset":
                     if len(parts) < 2:
@@ -902,3 +904,39 @@ class OptionsCompleter(Completer):
                             style="fg:grey",
                             selected_style="fg:white bg:grey"
                         )
+
+class OptionsPathCompleter(Completer):
+    def __init__(self, plugin_cls, options):
+        super().__init__()
+        self.plugin_cls=plugin_cls
+        self.options=options
+
+    def get_completions(self, document, complete_event):
+        pos = len(document.text_before_cursor.split())
+        word = str(document.get_word_before_cursor())
+        text_before_cursor=document.text_before_cursor
+
+        if pos == 1:
+            for option in self.options.keys():
+                if option.lower().startswith(word.lower()):
+                    yield Completion(
+                        option,
+                        start_position=-len(word),
+                        style="fg:grey",
+                        selected_style="fg:white bg:grey"
+                    )
+        elif pos == 2:
+            option = document.text_before_cursor.split()[0]
+            filepath = str(document.text_before_cursor)[(len(option)+1):]
+            path_completer = PathCompleter()
+            mock_document = Document(
+                text=filepath,
+                cursor_position=len(filepath)
+            )
+            for comp in path_completer.get_completions(mock_document, complete_event):
+                yield Completion(
+                    text=word+comp.text,
+                    start_position=-len(word),
+                    display=comp.display,
+                    display_meta=comp.display_meta
+                )

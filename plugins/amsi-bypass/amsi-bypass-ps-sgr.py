@@ -9,12 +9,12 @@ class AmsiBypassPsSgr(BaseCradlePlugin):
     AUTHOR      = "CyberSecN00b"
 
     OPTIONS = {
-        **BaseCradlePlugin.OPTIONS,
         "BYPASS_METHOD": {
             "description": "AMSI bypass technique: amsiInitFailed | amsiContext",
             "default": "amsiInitFailed",
             "restricted_to": ["amsiInitFailed", "amsiContext"]
-        }
+        },
+        **BaseCradlePlugin.OPTIONS
     }
 
     def generate(self, inst: CradleInstance) -> str:

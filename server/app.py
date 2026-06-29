@@ -44,6 +44,7 @@ def receive_notification(uid: str):
         if notification is not None:
             if cradle_type == CradleType.Notification:
                  _notification("<b><yellow>[NOTICE]</yellow></b>",notification)
+                 return Response("")
     abort(404)
 
 @app.route("/", methods=["GET"])
