@@ -1,3 +1,5 @@
+>[!NOTE]
+>Claude AI was used to convert the PowerShell/.NET Get-Random functionality into Python. Additionally, a very rough first draft was generated with Claude for the framework as a whole, but other than the Get-Random functionality everything was manually rewritten from scratch with several changes/fixes made.
 <img src=".images/PowerShell Cradler titlescreen.png?v=1">
 
 PowerShell Cradler is a cradling framework for PowerShell written in Python for ethical hackers and security researchers.
