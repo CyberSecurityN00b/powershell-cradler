@@ -1,4 +1,4 @@
-<img src=".images/PowerShell Cradler titlescreen.png">
+<img src=".images/PowerShell Cradler titlescreen.png?v=1">
 
 PowerShell Cradler is a cradling framework for PowerShell written in Python for ethical hackers and security researchers.
 
