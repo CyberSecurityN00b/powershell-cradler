@@ -97,10 +97,10 @@ class EndpointRegistry:
         self._save()
         return inst
     
-    def create_notification_channel_for(self, ref: str) -> Optional[CradleInstance]:
+    def create_notification_channel_for(self, ref: str, single_use: bool = True) -> Optional[CradleInstance]:
         inst = self.get_by_ref(ref)
         if inst:
-            return self.create(CradleType.Notification,inst.uid, None)
+            return self.create(CradleType.Notification,inst.uid, {"single_use":single_use})
         return inst
         
     def get_by_ref(self, ref: str) -> Optional[CradleInstance]:
@@ -224,6 +224,9 @@ class EndpointRegistry:
                 f,
                 indent=2
             )
+
+        if inst.options.get("single_use",True):
+            self.delete(inst.uid)
         
         return inst.cradle_type, inst.cradle_context, f"Notification for {inst.cradle_context} ({inst.uid}) from {remote_addr} written to {outpath}"
     
