@@ -1,6 +1,7 @@
 # Cradler specific
 storage/*
 notifications/*
+prison/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

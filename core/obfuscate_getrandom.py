@@ -241,4 +241,12 @@ def get_random_obfuscated_string(string: str, seed: int = None, list_avoid_strin
         if not regenerate:
             break
 
-    return f'([string]::new(([char[]]"{unshuffled_str.replace('"','`"').replace("$","`$").replace("\n","`n")}"|Get-Random -Se {seed} -C {original_n})))'
+    return f'([string]::new(([char[]]"{helper_powershell_escape(unshuffled_str)}"|Get-Random -Se {seed} -C {original_n})))'
+
+def helper_powershell_escape(string: str):
+    return (
+        string.replace("`","``")
+        .replace('"','`"')
+        .replace("$","`$")
+        .replace("\n","`n")
+    )

@@ -522,8 +522,8 @@ class PowerShellCradleTerminal:
         table.add_column("First URL",  style="dim", no_wrap=True)
         table.add_column("Chain",      style="white")
         chain_ctr = 0
-        chain_links = []
         for inst in chain_starts:
+            chain_links = []
             chain_ctr += 1
             url = f"http://{self.server_config['domain']}/{inst.uid}"
             chain_links.append(inst)

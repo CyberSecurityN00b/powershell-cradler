@@ -44,8 +44,8 @@ class BaseCradlePlugin(ABC):
             return f"({sgr(cradle)})|iex"
         return f"{cradle}"
     
-    def notification_callback_snippet(self, inst: CradleInstance, header_var_dict: dict) -> str:
-        notification_channel = self._endpoint_registry.create_notification_channel_for(inst.uid)
+    def notification_callback_snippet(self, inst: CradleInstance, header_var_dict: dict, single_use: bool = True) -> str:
+        notification_channel = self._endpoint_registry.create_notification_channel_for(inst.uid,single_use)
         snippet = f"""
 $responseJson = @{{
 {"\n".join(f"\t{x} = {header_var_dict[x]} | Out-String" for x in header_var_dict.keys())}

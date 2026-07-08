@@ -37,7 +37,14 @@ function LookupFunc {{
     $assem = ([AppDomain]::CurrentDomain.GetAssemblies()|Where-Object{{$_.GlobalAssemblyCache -and $_.Location.Split('\\')[-1].Equals('System.dll')}}).GetType('Microsoft.Win32.UnsafeNativeMethods');
     $tmp=@();
     $assem.GetMethods()|ForEach-Object{{if($_.Name -eq "GetProcAddress"){{$tmp+=$_}}}};
-    return $tmp[0].Invoke($null,@(($assem.GetMethod('GetModuleHandle')).Invoke($null,@($moduleName)),$functionName))
+    try {{
+        $result = $tmp[0].Invoke($null,@(($assem.GetMethod('GetModuleHandle')).Invoke($null,@($moduleName)),$functionName))
+    }} catch {{
+        $wrapper = new-Object System.IntPtr;
+        $handle = [System.Runtime.InteropServices.HandleRef]::new($wrapper,($assem.GetMethod('GetModuleHandle')).Invoke($null,@($moduleName)))
+        $result = $tmp[0].Invoke($null,($handle,$functionName))
+    }}
+    return $result
 }}
 
 function getDelegateType {{
